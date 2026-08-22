@@ -1,6 +1,3 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![GitHub release](https://img.shields.io/github/v/release/tanle-mtr/winbox)](https://github.com/tanle-mtr/winbox/releases)
-[![GitHub stars](https://img.shields.io/github/stars/tanle-mtr/winbox?style=social)](https://github.com/tanle-mtr/winbox/stargazers)
 # WinBox - Windows 系统工具箱
 
 > 集合了 GitHub 上 14 个顶级 Windows 优化工具的核心功能，一键直达。
