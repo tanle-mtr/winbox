@@ -981,6 +981,45 @@ function Uninstall-WinBoxSoftware {
     }
 }
 
+
+# === V2.0 ADDITIONAL FUNCTIONS ===
+function Get-WinBoxStartupItems {
+    param([switch]$DisabledOnly)
+    $items = @()
+    $reg = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -EA SilentlyContinue
+    if ($reg) {
+        $reg.PSObject.Properties | Where-Object { $_.Name -notmatch '^PS' } | ForEach-Object {
+            $items += [PSCustomObject]@{ Name=$_.Name; Path=$_.Value; Source="Registry" }
+        }
+    }
+    $wm = Get-CimInstance Win32_StartupCommand -EA SilentlyContinue
+    $wm | Where-Object { $_.Location -ne 'HKLM' } | ForEach-Object {
+        $items += [PSCustomObject]@{ Name=$_.Name; Path=$_.Command; Source="WMI" }
+    }
+    return $items | Sort-Object Name
+}
+function Invoke-WinBoxCreateRestore {
+    checkpoint-computer -Description "WinBox Manual Restore Point" -EA SilentlyContinue
+    if ($LASTEXITCODE -eq 0) { Write-Log "System restore point created" }
+    else { Write-Log "Restore point skipped (system restore may be disabled)" "WARN" }
+}
+function Get-WinBoxSystemReport {
+    $os = Get-ComputerInfo
+    $disk = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -EA SilentlyContinue
+    $cpu = Get-CimInstance Win32_Processor -EA SilentlyContinue
+    $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1)
+    $def = Get-MpComputerStatus -EA SilentlyContinue
+    @{
+        OS = "$($os.WindowsProductName) Build $($os.WindowsBuildLabEx)"
+        CPU = $cpu.Name
+        RAM_GB = $ram
+        Disks = ($disk | ForEach-Object { "$($_.DeviceID): $([math]::Round($_.Size/1GB,0))GB ($([math]::Round($_.FreeSpace/$_.Size*100,0))% free)" }) -join "; "
+        Defender = if ($def) { "RT:$($def.RealTimeProtectionEnabled)" } else { "N/A" }
+        PowerPlan = (powercfg /getactivescheme 2>$null) -replace ".*GUID: ", ""
+        Admin = (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+}
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
@@ -1393,6 +1432,32 @@ $Optimizations += @{
     "Quick-GamingMode"      = @{Name="One-Click Game Optimize";Category="QuickActions";Description="Game Mode + fullscreen opt + GPU priority";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Type DWord;Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_FSEBehavior" -Value 2 -Type DWord;Write-Log "Game optimization applied"};Risk="Safe"}
     "Quick-PrivacyHardcore" = @{Name="Deep Privacy Protection";Category="QuickActions";Description="Disable telemetry + ads + location + activity history";Script={$o=$Optimizations["Disable-Telemetry"];&$o.Script;$o=$Optimizations["Disable-Ads"];&$o.Script;$o=$Optimizations["Disable-Location"];&$o.Script;$o=$Optimizations["Disable-ActivityHistory"];&$o.Script;Write-Log "Deep privacy protection applied"};Risk="Safe"}
     "Quick-PerformanceBoost" = @{Name="Performance Boost Full Set";Category="QuickActions";Description="Power plan + visuals + mouse + background apps";Script={$o=$Optimizations["Performance-PowerPlan"];&$o.Script;$o=$Optimizations["Performance-VisualFX"];&$o.Script;$o=$Optimizations["Performance-MouseAccel"];&$o.Script;$o=$Optimizations["Performance-BackgroundApps"];&$o.Script;Write-Log "Performance boost applied"};Risk="Safe"}
+}
+
+
+# === V2.0 ADDITIONAL TOOLS ===
+$Optimizations += @{
+    "Startup-Manager" = @{Name="Startup Item Manager";Category="Customize";Description="View and manage all startup programs";Script={$items=Get-WinBoxStartupItems;Write-Log "Startup items ($($items.Count)):";$items|ForEach-Object{Write-Log "  [$($_.Source)] $($_.Name) => $($_.Path.Substring(0,[Math]::Min(60,$_.Path.Length)))"}};Risk="Safe"}
+    "Appx-RemoveLegacy" = @{Name="Remove Legacy Windows Apps";Category="SoftwareUninstall";Description="Remove pre-installed Windows bloatware (News,Clip,3DViewer etc.)";Script={@("Microsoft.BingNews","Microsoft.BingSearch","Microsoft.BingWeather","Microsoft.GetHelp","Microsoft.Getstarted","Microsoft.Microsoft3DViewer","Microsoft.MicrosoftOfficeHub","Microsoft.MixedReality.Portal","Microsoft.People","Microsoft.Print3D","Microsoft.SkypeApp","Microsoft.Wallet","Microsoft.WindowsAlarms","microsoft.windowscommunicationsapps","Microsoft.WindowsFeedbackHub","Microsoft.WindowsMaps","Microsoft.WindowsPhone","Microsoft.WindowsSoundRecorder","Microsoft.Xbox.TCUI","Microsoft.XboxApp","Microsoft.XboxGameOverlay","Microsoft.XboxGamingOverlay","Microsoft.XboxIdentityProvider","Microsoft.XboxSpeechToTextOverlay","Microsoft.YourPhone","Microsoft.ZuneMusic","Microsoft.ZuneVideo","Microsoft.BingFoodAndDrink","Microsoft.BingHealthAndFitness","Microsoft.BingSports","Microsoft.BingTranslator","Microsoft.BingTravel","Microsoft.OneConnect","Microsoft.AAD.BrokerPlugin")|ForEach-Object{try{$p=Get-AppxPackage -Name $_ -EA SilentlyContinue;if($p){Remove-AppxPackage -Package $p.PackageFullName -EA SilentlyContinue;Write-Log "Removed: $_"}}}catch{Write-Log "Skip: $_" "WARN"}};Risk="Moderate"}
+    "Theme-DarkMode" = @{Name="Enable Dark Mode";Category="Customize";Description="Switch Windows to dark theme";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "AppsUseLightTheme" -Value 0 -Type DWord;Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "SystemUsesLightTheme" -Value 0 -Type DWord;Write-Log "Dark mode enabled"};Revert={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "AppsUseLightTheme" -Value 1 -Type DWord;Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "SystemUsesLightTheme" -Value 1 -Type DWord};Risk="Safe"}
+    "Theme-LightMode" = @{Name="Enable Light Mode";Category="Customize";Description="Switch Windows to light theme";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "AppsUseLightTheme" -Value 1 -Type DWord;Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "SystemUsesLightTheme" -Value 1 -Type DWord;Write-Log "Light mode enabled"};Risk="Safe"}
+    "Privacy-NoAnimations" = @{Name="Disable Animations";Category="Privacy";Description="Disable window animations for snappier feel";Script={Set-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name "MinAnimate" -Value "0" -Type String -EA SilentlyContinue;Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "ListviewAlphaSelect" -Value 0 -Type DWord -EA SilentlyContinue;Write-Log "Animations disabled"};Revert={Set-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name "MinAnimate" -Value "1" -Type String -EA SilentlyContinue};Risk="Safe"}
+    "Privacy-StorageSense" = @{Name="Enable Storage Sense";Category="Cleanup";Description="Enable Windows Storage Sense for auto cleanup";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" -Name "01" -Value 1 -Type DWord -EA SilentlyContinue;Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" -Name "256" -Value 1 -Type DWord -EA SilentlyContinue;Write-Log "Storage Sense enabled"};Revert={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" -Name "01" -Value 0 -Type DWord -EA SilentlyContinue};Risk="Safe"}
+    "Privacy-StopUpdatesASAP" = @{Name="Defer Feature Updates";Category="Privacy";Description="Defer feature updates for 365 days";Script={Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" -Name "DeferFeatureUpdates" -Value 1 -Type DWord -EA SilentlyContinue;Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" -Name "DeferFeatureUpdatesPeriodInDays" -Value 365 -Type DWord -EA SilentlyContinue;Write-Log "Feature update defer set to 365 days"};Revert={Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" -Name "DeferFeatureUpdates" -EA SilentlyContinue};Risk="Safe"}
+    "Privacy-DisableDVR" = @{Name="Disable Game DVR";Category="Privacy";Description="Disable Xbox Game Bar and DVR recording";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord -EA SilentlyContinue;Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" -Name "HistoricalCaptureEnabled" -Value 0 -Type DWord -EA SilentlyContinue;Write-Log "Game DVR disabled"};Revert={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" -Name "AppCaptureEnabled" -Value 1 -Type DWord};Risk="Safe"}
+    "Privacy-DisableDeliveryOpt" = @{Name="Disable Delivery Optimization";Category="Privacy";Description="Stop Windows downloading updates from other PCs";Script={Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" -Name "DODownloadMode" -Value 0 -Type DWord -EA SilentlyContinue;Write-Log "Delivery Optimization disabled"};Revert={Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" -Name "DODownloadMode" -EA SilentlyContinue};Risk="Safe"}
+    "Privacy-DisableNotifications" = @{Name="Disable All Notifications";Category="Privacy";Description="Turn off Windows notifications system-wide";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications" -Name "ToastEnabled" -Value 0 -Type DWord -EA SilentlyContinue;Write-Log "Notifications disabled"};Revert={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications" -Name "ToastEnabled" -Value 1 -Type DWord};Risk="Safe"}
+    "Privacy-DisableBingSearch" = @{Name="Disable Bing in Search";Category="Privacy";Description="Remove web search results from Start menu";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Name "BingSearchEnabled" -Value 0 -Type DWord -EA SilentlyContinue;Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Name "AllowSearchToUseLocation" -Value 0 -Type DWord -EA SilentlyContinue;Write-Log "Bing search disabled"};Revert={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Name "BingSearchEnabled" -Value 1 -Type DWord};Risk="Safe"}
+    "Privacy-DisableCopilot" = @{Name="Disable Copilot Button";Category="AI";Description="Disable Windows Copilot AI button in taskbar";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" -Name "TurnOffWindowsCopilot" -Value 1 -Type DWord -EA SilentlyContinue;Write-Log "Copilot button disabled"};Revert={Remove-ItemProperty -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" -Name "TurnOffWindowsCopilot" -EA SilentlyContinue};Risk="Safe"}
+    "Privacy-DisableGameBar" = @{Name="Disable Game Bar";Category="Privacy";Description="Disable Xbox Game Bar overlay and recording";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" -Name "GameBarPresentationsEnabled" -Value 0 -Type DWord -EA SilentlyContinue;Write-Log "Game Bar disabled"};Revert={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" -Name "GameBarPresentationsEnabled" -Value 1 -Type DWord};Risk="Safe"}
+    "Privacy-DisableSnapAssist" = @{Name="Disable Snap Assist";Category="Customize";Description="Disable window snap assist and layouts";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "EnableSnapAssistFlyout" -Value 0 -Type DWord -EA SilentlyContinue;Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "EnableSnapBar" -Value 0 -Type DWord -EA SilentlyContinue;Write-Log "Snap Assist disabled"};Revert={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "EnableSnapAssistFlyout" -Value 1 -Type DWord};Risk="Safe"}
+    "Privacy-PreventAutoReboot" = @{Name="Prevent Auto Reboot";Category="Privacy";Description="Prevent Windows from auto-rebooting after updates";Script={Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "NoAutoRebootWithLoggedOnUsers" -Value 1 -Type DWord -EA SilentlyContinue;Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "AUPowerManagement" -Value 0 -Type DWord -EA SilentlyContinue;Write-Log "Auto reboot prevented"};Revert={Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "NoAutoRebootWithLoggedOnUsers" -EA SilentlyContinue};Risk="Safe"}
+    "Privacy-DisableChat" = @{Name="Disable Windows Chat";Category="Privacy";Description="Disable Windows Chat (Teams integration)";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Chat" -Name "ChatIcon" -Value 3 -Type DWord -EA SilentlyContinue;Write-Log "Windows Chat disabled"};Revert={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Chat" -Name "ChatIcon" -Value 1 -Type DWord};Risk="Safe"}
+    "Privacy-DisablePhoneLink" = @{Name="Disable Phone Link";Category="Privacy";Description="Disable Phone Link / Your Phone integration";Script={Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CDP" -Name "NearShareChannelUserAuthPolicy_ANDROID" -Value 0 -Type DWord -EA SilentlyContinue;Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CDP" -Name "NearShareChannelUserAuthPolicy_IOS" -Value 0 -Type DWord -EA SilentlyContinue;Write-Log "Phone Link disabled"};Risk="Safe"}
+    "Security-DefenderFull" = @{Name="Enable Windows Defender";Category="Security";Description="Enable Windows Defender and real-time protection";Script={Set-WinBoxService "WinDefend" "Automatic";Start-Service WinDefend -EA SilentlyContinue;Set-WinBoxService "Sense" "Automatic";Start-Service Sense -EA SilentlyContinue;Write-Log "Defender enabled"};Risk="Safe"}
+    "System-RestorePoint" = @{Name="Create Restore Point";Category="QuickActions";Description="Create a system restore point before making changes";Script={Invoke-WinBoxCreateRestore};Risk="Safe"}
+    "System-SysReport" = @{Name="System Health Report";Category="QuickActions";Description="Generate comprehensive system report";Script={$r=Get-WinBoxSystemReport;Write-Log "=== System Report ===";Write-Log "OS: $($r.OS)";Write-Log "CPU: $($r.CPU)";Write-Log "RAM: $($r.RAM_GB)GB";Write-Log "Disks: $($r.Disks)";Write-Log "Defender: $($r.Defender)";Write-Log "Power Plan: $($r.PowerPlan)";Write-Log "Admin: $($r.Admin)"};Risk="Safe"}
+    "Quick-FullDeblock" = @{Name="Full Debloat";Category="QuickActions";Description="Apply all privacy + performance + cleanup tweaks at once";Script={$seq=@("Disable-Telemetry","Disable-Ads","Disable-Location","Disable-ActivityHistory","Performance-PowerPlan","Performance-VisualFX","Performance-MouseAccel","Performance-BackgroundApps","Cleanup-DeepClean");foreach($k in $seq){$o=$Optimizations[$k];if($o){&$o.Script}};Write-Log "Full debloat applied"};Risk="Moderate"}
 }
 
 [System.Windows.Forms.Application]::Run($form)
