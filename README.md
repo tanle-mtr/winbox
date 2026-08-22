@@ -2,7 +2,7 @@
 
 > 集合了 GitHub 上 14 个顶级 Windows 优化工具的核心功能，一键直达。
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-green)
 ![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078d6)
 
@@ -28,6 +28,15 @@
 | 12 | [W4RH4WK/Debloat-Windows-10](https://github.com/W4RH4WK/Debloat-Windows-10) | 6,144 | PowerShell | 早期 debloat 思路 |
 | 13 | [Sycnex/Windows10Debloater](https://github.com/Sycnex/Windows10Debloater) | 18,839 | PowerShell | AppX 卸载逻辑 |
 | 14 | [BoringBoredom/PC-Optimization-Hub](https://github.com/BoringBoredom/PC-Optimization-Hub) | 1,234 | 资源集合 | 优化参考资料 |
+
+---
+
+### 方式零：双击 EXE（最简单）
+
+```
+双击 WinBox.exe
+```
+> PyInstaller 打包的单文件程序，无需安装 Python 或 PowerShell 额外依赖，静默启动无控制台窗口。
 
 ---
 
@@ -103,7 +112,7 @@ cd E:\编程作品\作品\DeepSeek\winbox\WinBox
 | 禁用透明效果 | 关闭毛玻璃效果提升性能 |
 | 任务栏添加"结束任务" | 右键任务栏可强制关闭应用 |
 
-### 🤖 AI 功能管理
+### 🤖 AI 功能管理 (新增)\n| 工具 | 说明 |\n|------|------|\n| 禁用 Windows Recall | 完全关闭截图回忆功能 |\n| 禁用剪贴板历史 | 关闭剪贴板记录和云端同步 |\n\n### 💾 C 盘深度清理 (新增)\n| 工具 | 说明 |\n|------|------|\n| 一键深度清理 | 清理临时文件、更新缓存、日志、缩略图、DNS、minidump |\n| 分析 C 盘空间 | 扫描 C 盘主文件夹并生成空间报告 |\n| 清理临时文件 | 清理用户和系统临时文件 |\n| 清理 Windows 更新缓存 | 停止 Windows Update 并清空下载缓存 |\n| 刷新 DNS 缓存 | 清除 DNS 客户端缓存 |\n| 清理内存转储文件 | 删除 MEMORY.DMP 和 Minidump 文件 |\n| 清理 Windows 升级残留 | 移除 Windows 升级遗留文件夹 |\n\n### 📦 软件卸载管理 (新增)\n| 工具 | 说明 |\n|------|------|\n| 扫描已安装软件 | 从注册表和 WinGet 列出所有程序 |\n| 卸载 Microsoft Edge | 移除 Edge 浏览器 |\n| 卸载 OneDrive | 彻底移除 OneDrive |\n| 卸载 Microsoft Teams | 移除 Teams 聊天应用 |\n\n### 🛡️ 安全加固 (增强)\n| 工具 | 说明 |\n|------|------|\n| 最大化 UAC 安全 | 设置 UAC 为最高级别 |\n| 确保 Defender 运行 | 保持 Windows 安全中心激活 |\n| 优化防火墙规则 | 启用防火墙并阻止匿名枚举 |\n\n### 🚀 一键操作 (增强)\n| 工具 | 说明 |\n|------|------|\n| 一键游戏优化 | Game Mode + 全屏优化 + GPU 调度 |\n| 深度隐私保护 | 隐私类所有选项一键应用 |\n| 性能 Boost 全套 | 性能类所有选项一键应用 |
 | 工具 | 说明 |
 |------|------|
 | 禁用 Windows Recall | 完全关闭截图回忆功能 |
@@ -196,10 +205,10 @@ WinBox/
 
 ## 📝 版本历史
 
-### v1.0.0 (2026-08-22)
+### v2.0.0 (2026-08-22)
 - 初始版本
 - 整合 14 个 GitHub 项目精华
-- 30+ 优化工具
+- 57+ 优化工具
 - 分类导航 + 执行日志
 
 ---
