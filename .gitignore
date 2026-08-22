@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+*.spec
+_build/
+dist/
+build/
+*.zip
+*_b64.txt
